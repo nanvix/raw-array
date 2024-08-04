@@ -1,0 +1,80 @@
+# Copyright(c) The Maintainers of Nanvix.
+# Licensed under the MIT License.
+
+name: Build and Test
+
+on: push
+
+env:
+  TARGET_BRANCH: ${{ github.ref_name }}
+
+jobs:
+
+  setup:
+    name: Setup
+    runs-on: ubuntu-latest
+    steps:
+    - name: Setup
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.hostname }}
+        username: ${{ secrets.username }}
+        key: ${{ secrets.sshkey }}
+        port: ${{ secrets.portnum }}
+        envs: TARGET_BRANCH
+        script: |
+          rm -rf raw-array
+          git clone --recursive https://github.com/nanvix/raw-array.git --branch ${TARGET_BRANCH}
+
+  build:
+    name: Build
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+    - name: Build
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.hostname }}
+        username: ${{ secrets.username }}
+        key: ${{ secrets.sshkey }}
+        port: ${{ secrets.portnum }}
+        script: |
+          source "$HOME/.cargo/env"
+          cd raw-array
+          cargo build --verbose
+
+  test:
+    name: Test
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - name: test
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.hostname }}
+        username: ${{ secrets.username }}
+        key: ${{ secrets.sshkey }}
+        port: ${{ secrets.portnum }}
+        script: |
+          source "$HOME/.cargo/env"
+          cd raw-array
+          cargo test --verbose
+
+  cleanup:
+    name: Cleanup
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+    - name: Cleanup
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.hostname }}
+        username: ${{ secrets.username }}
+        key: ${{ secrets.sshkey }}
+        port: ${{ secrets.portnum }}
+        script: |
+          cd raw-array
+          git checkout --force dev
+          git clean -fdx
+          git remote prune origin
